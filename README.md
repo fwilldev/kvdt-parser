@@ -37,13 +37,13 @@ Die CSV- und HTML-Dateien befinden sich dann im selben Pfad wie die kvdt-parser-
 
 #### Selbst kompilieren
 
-Alle relevanten Dateien werden im ``/taget`` Ordner gespeichert.
+Alle relevanten Dateien werden im ``/target`` Ordner gespeichert.
 
 .jar erzeugen:
 
 ```./mvnw clean package``` 
 
-Konfiguration des GraalVM Agents im ```/taget/native-image``` Ordner zu erzeugen:
+Konfiguration des GraalVM Agents im ```/target/native-image``` Ordner zu erzeugen:
 
 ```./mvnw -Pnative -Dagent exec:exec@java-agent``` 
 

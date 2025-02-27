@@ -8,14 +8,16 @@ import me.tongfei.progressbar.ProgressBarBuilder;
 
 import java.io.FileOutputStream;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
@@ -55,6 +57,7 @@ public class ConParser {
         StringBuilder summaryHtml = new StringBuilder();
         String lastCode = "";
         Map<String, BigDecimal> cipherAmount = new HashMap<>();
+        Map<String, Map<String, BigDecimal>> cipherSachkosten = new HashMap<>();
         if (CON_PATTERN.matcher(conFile.getFileName().toString()).matches()) {
             Map<String, String> fieldMap = KvdtFields.CONTENT;
             try (Stream<String> lines = Files.lines(conFile, Charset.forName("ISO-8859-15"))) {
@@ -62,7 +65,7 @@ public class ConParser {
                 summaryHtml.append(HTML_HEAD);
                 summaryHtml.append("<body>");
                 summaryHtml.append("<h1>KVDT Parser</h1> ")
-                        .append("<h2>Zusammenfassung für Datei:")
+                        .append("<h2>Leistungen in Datei:")
                         .append(file)
                         .append(" vom ")
                         .append(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm").format(LocalDateTime.now()))
@@ -163,8 +166,24 @@ public class ConParser {
                         // apply multiplicator for the last processed code if multiplicator is present
                         if (key.equals("5005")) {
                             if (!lastCode.isBlank()) {
-                                // substract by one because we add 1 to that cypher if a cypher is found
+                                // substract by one because we add 1 to that cypher if a cypher is found above
                                 cipherAmount.computeIfPresent(lastCode, (s, bigDecimal) -> bigDecimal.add(new BigDecimal(value)).subtract(BigDecimal.ONE));
+                            }
+                        }
+                        if (key.equals("5012")) {
+                            if (!lastCode.isBlank()) {
+                                if (cipherSachkosten.containsKey(lastCode)) {
+                                    Map<String, BigDecimal> amountPerPrice = cipherSachkosten.get(lastCode);
+                                    if (amountPerPrice.containsKey(value)) {
+                                        amountPerPrice.put(value, amountPerPrice.get(value).add(BigDecimal.ONE));
+                                    } else {
+                                        amountPerPrice.put(value, new BigDecimal(BigInteger.ONE));
+                                    }
+                                } else {
+                                    Map<String, BigDecimal> amountPerPrice = new HashMap<>();
+                                    amountPerPrice.put(value, new BigDecimal(BigInteger.ONE));
+                                    cipherSachkosten.put(lastCode, amountPerPrice);
+                                }
                             }
                         }
                         html.append("<tr>")
@@ -207,8 +226,17 @@ public class ConParser {
                 .append("<td>")
                 .append("Anzahl")
                 .append("</td>")
+                .append("<td>")
+                .append("Medikamenten/Sachkosten")
+                .append("</td>")
                 .append("</tr>");
         cipherAmount.forEach((cipher, amount) -> {
+            StringBuilder cipherSachkostenString = new StringBuilder();
+            if (cipherSachkosten.containsKey(cipher)) {
+                cipherSachkosten.get(cipher).forEach((k, v) ->{
+                    cipherSachkostenString.append(parseEurocentToReadable(k)).append(": ").append(v).append(" mal ").append(System.lineSeparator());
+                });
+            }
             summaryHtml
                     .append("<tr>")
                     .append("<td>")
@@ -216,6 +244,9 @@ public class ConParser {
                     .append("</td>")
                     .append("<td>")
                     .append(amount)
+                    .append("</td>")
+                    .append("<td>")
+                    .append(cipherSachkostenString)
                     .append("</td>")
                     .append("</tr>");
         });
@@ -232,7 +263,7 @@ public class ConParser {
             byte[] htmlBytes = html.toString().getBytes();
             fosHtml.write(htmlBytes);
         }
-        try (FileOutputStream fosHtmlSummary = new FileOutputStream(conFile.getFileName().toString() + "_zusammenfassung.html")) {
+        try (FileOutputStream fosHtmlSummary = new FileOutputStream(conFile.getFileName().toString() + "_leistungen.html")) {
             byte[] htmlBytes = summaryHtml.toString().getBytes();
             fosHtmlSummary.write(htmlBytes);
         }
@@ -245,6 +276,13 @@ public class ConParser {
             renderer.layout();
             renderer.createPDF(outputStream);
         }*/
+    }
+
+    private static String parseEurocentToReadable(String value) {
+        int cents = Integer.parseInt(value);
+        double euros = cents / 100.0;
+        DecimalFormat df = new DecimalFormat("#,##0.00 €", DecimalFormatSymbols.getInstance(Locale.GERMAN));
+        return df.format(euros);
     }
 
 }
